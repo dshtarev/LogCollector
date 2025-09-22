@@ -44,6 +44,10 @@ protected:
     void createFilterList();
     bool checkFilterMatch( const QString & );
 
+    void updateProcessList();
+
+    void getProcessInfo( int pid );
+
 private:
     Ui::MainWindow *ui;
 };

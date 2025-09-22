@@ -2,6 +2,7 @@
 #include <QDebug>
 #include <QApplication>
 #include <QRegularExpression>
+#include <QCheckBox>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -37,6 +38,7 @@ MainWindow::MainWindow(QWidget *parent) :
     m_udpSocket->bind(54321);
     connect(m_udpSocket, SIGNAL(readyRead()), this, SLOT(readPendingDatagrams()));
 
+    updateProcessList();
 
 }
 
@@ -193,4 +195,38 @@ void MainWindow::addMessage(const QString & msg)
     //ui->lwLog->scrollToBottom();
 
 }
+
+
+void MainWindow::updateProcessList()
+{
+    QListWidgetItem *item = new QListWidgetItem(ui->lwProcesses);
+
+    // создаём кастомный виджет
+    QWidget *widget = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(widget);
+
+    QLabel *title = new QLabel("Заголовок");
+    QLabel *subtitle = new QLabel("CPU=1.4% MEM=32M ");
+
+    QCheckBox * processCheckBox = new QCheckBox("CONTROL");
+
+    layout->addWidget(processCheckBox);
+    layout->addWidget(subtitle);
+    layout->setContentsMargins(5, 5, 5, 5);
+
+    widget->setLayout(layout);
+
+    widget->show();
+
+    // привязываем виджет к item
+    ui->lwProcesses->addItem(item);
+    ui->lwProcesses->setItemWidget(item, widget);
+
+
+
+    item->setSizeHint(widget->sizeHint());
+
+}
+
+
 
