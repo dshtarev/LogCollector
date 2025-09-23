@@ -1,10 +1,58 @@
 #include <QUdpSocket>
 #include <QDebug>
 #include <QApplication>
+#include <QtQuick/QQuickItem>
+#include <QtQuickWidgets/QQuickWidget>
+#include <QtQuick/QQuickView>
 #include <QRegularExpression>
 #include <QCheckBox>
+#include <QScrollArea>
+#include <QProcess>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+
+ProcessItemWidget::ProcessItemWidget(QWidget * parent, const QString & processName):
+    QWidget(parent)
+{
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(3, 3, 3, 3);
+    QFrame * frm = new QFrame(this);
+    layout->addWidget( frm );
+    setLayout(layout);
+
+    QVBoxLayout *frmlayout = new QVBoxLayout(frm);
+
+    cbProcessName = new QCheckBox(processName);
+    lbInfo = new QLabel("CPU:   MEM: ");
+
+    frmlayout->addWidget(cbProcessName);
+    frmlayout->addWidget(lbInfo);
+    frmlayout->setContentsMargins(0, 0, 0, 0);
+
+}
+
+ProcessItemWidget::~ProcessItemWidget()
+{
+
+}
+
+
+void ProcessItemWidget::setInfo(const ProcessInfo & info)
+{
+    QString infoStr = "CPU:" + QString::number(info.cpuUsage,'f', 2 ) + " MEM:"+QString::number(info.mem/1000.0,'f',2 )+"MB";
+    lbInfo->setText( infoStr );
+
+    if( info.process_state == QProcess::Running )
+    {
+        setStyleSheet("background-color: lightgreen;");
+    }
+
+    if( info.process_state == QProcess::NotRunning )
+    {
+        setStyleSheet("background-color: red;");
+    }
+
+}
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -40,12 +88,40 @@ MainWindow::MainWindow(QWidget *parent) :
 
     updateProcessList();
 
+    createDashboard();
+
 }
 
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::createDashboard()
+{
+    ui->quickWidget->setSource(QUrl(QStringLiteral("../dashboard_1.qml")));
+
+    // Получаем rootObject (QML корень)
+    QQuickItem *rootObject = ui->quickWidget->rootObject();
+
+    // Подготовим QVariantMap
+    QVariantMap map;
+    map["name"] = "TestName";
+    map["value"] = 42;
+
+    // Вызовем QML функцию processData(map)
+    if (rootObject) {
+        QVariant returnedValue;
+        QMetaObject::invokeMethod(
+            rootObject,
+            "processData",
+            Q_RETURN_ARG(QVariant, returnedValue),
+            Q_ARG(QVariant, map)
+        );
+    }
+
+
 }
 
 void MainWindow::showProcessTriggered()
@@ -126,7 +202,7 @@ void MainWindow::searchClicked()
 
         if( rx.match( item->text() ).hasMatch() )
         {
-            item->setBackground( QBrush( Qt::yellow,Qt::HorPattern ) );
+            item->setBackground( QBrush( Qt::yellow,Qt::SolidPattern ) );
 
             if(!nextSelected && i > cI )
             {
@@ -168,17 +244,77 @@ void MainWindow::readPendingDatagrams() {
         QByteArray datagram;
         datagram.resize(int(m_udpSocket->pendingDatagramSize()));
         m_udpSocket->readDatagram(datagram.data(), datagram.size());
-        QString msg = QString::fromUtf8(datagram);
 
-        if( ui->pbCapture->isChecked() )
-            if( checkFilterMatch(msg) )
-                addMessage( msg );
+        Msg * msg = (Msg *)datagram.data();
+
+        if( msg->type == ETextMsg )
+        {
+            QString msg = createStringMessage( datagram );
+
+            if( ui->pbCapture->isChecked() )
+                if( checkFilterMatch(msg) )
+                    addMessage( msg );
+        }
+
+        if( msg->type == EProcessInfoMsg )
+        {
+            ProcessInfo * processInfo = (ProcessInfo *)msg->payload;
+
+            qDebug() << "CPU" << QString().setNum( processInfo->cpuUsage );
+            QQuickItem *rootObject = ui->quickWidget->rootObject();
+
+
+            // Вызовем QML функцию processData(map)
+            if (rootObject) {
+                QVariant returnedValue;
+                QMetaObject::invokeMethod(
+                    rootObject,
+                    "appendValue",
+                    Q_RETURN_ARG(QVariant, returnedValue),
+                    Q_ARG(QVariant,  processInfo->cpuUsage )
+                );
+            }
+
+            QString key = QString(msg->prefix) + QString( msg->processName );
+            if( m_processMap.contains( key ) == false )
+            {
+                ProcessWidgetDescriptor wd;
+                wd.widget = NULL;
+                m_processMap[key] = wd;
+                updateProcessList();
+            }
+
+            ProcessItemWidget * wgt = m_processMap[key].widget;
+
+            if( wgt )
+                wgt->setInfo( *processInfo );
+            m_processMap[key].lifeTime++;
+
+        }
+
     }
 }
 
+QString MainWindow::createStringMessage(const QByteArray & ba )
+{
+    QString str;
+    Msg * msg = (Msg *)ba.data();
+
+    str += "[" + QString(msg->prefix) + "*" + QString(msg->processName ) + "]";
+    QString channelName = "stdio";
+    if( msg->channelType == EStderr )
+        channelName = "stderr";
+    str += "[" + channelName + "]";
+
+    str += QString( msg->payload );
+
+    return str;
+}
 
 void MainWindow::addMessage(const QString & msg)
 {
+
+
 
     QListWidgetItem * item = new QListWidgetItem( msg, ui->lwLog );
     item->setFont( m_logItemsFont );
@@ -199,33 +335,23 @@ void MainWindow::addMessage(const QString & msg)
 
 void MainWindow::updateProcessList()
 {
-    QListWidgetItem *item = new QListWidgetItem(ui->lwProcesses);
+    ui->lwProcesses->clear();
 
-    // создаём кастомный виджет
-    QWidget *widget = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(widget);
+    for (auto it = m_processMap.begin(); it != m_processMap.end(); ++it) {
+        const QString &key = it.key();
+        ProcessWidgetDescriptor value = it.value();
 
-    QLabel *title = new QLabel("Заголовок");
-    QLabel *subtitle = new QLabel("CPU=1.4% MEM=32M ");
+        QListWidgetItem *item = new QListWidgetItem(ui->lwProcesses);
+        ProcessItemWidget * widget = new ProcessItemWidget(nullptr, key );
+        widget->show();
 
-    QCheckBox * processCheckBox = new QCheckBox("CONTROL");
+        it.value().widget = widget;
+        // привязываем виджет к item
+        ui->lwProcesses->addItem(item);
+        ui->lwProcesses->setItemWidget(item, widget);
 
-    layout->addWidget(processCheckBox);
-    layout->addWidget(subtitle);
-    layout->setContentsMargins(5, 5, 5, 5);
-
-    widget->setLayout(layout);
-
-    widget->show();
-
-    // привязываем виджет к item
-    ui->lwProcesses->addItem(item);
-    ui->lwProcesses->setItemWidget(item, widget);
-
-
-
-    item->setSizeHint(widget->sizeHint());
-
+        item->setSizeHint(widget->sizeHint());
+    }
 }
 
 
