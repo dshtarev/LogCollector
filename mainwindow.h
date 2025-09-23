@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QVariantMap>
 #include <QCheckBox>
+#include <QHostAddress>
 #include <QFont>
 #include <QLabel>
 
@@ -63,6 +64,9 @@ struct ProcessWidgetDescriptor
 {
     int lifeTime;
     ProcessItemWidget * widget;
+    ProcessInfo processInfo;
+    QHostAddress processAddress;
+    int processPort;
 
     ProcessWidgetDescriptor()
     {
@@ -98,6 +102,8 @@ public slots:
     void showProcessTriggered();
     void showFiltersTriggered();
     void exitTriggered();
+
+    void onProcessSelectionChanged();
 
 protected:
     QString createStringMessage( const QByteArray & );

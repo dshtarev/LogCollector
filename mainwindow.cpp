@@ -82,6 +82,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect( ui->actionExit, SIGNAL(triggered()), this, SLOT(exitTriggered()) );
 
 
+    connect( ui->lwProcesses, SIGNAL(itemSelectionChanged()), this, SLOT(onProcessSelectionChanged()) );
+
     m_udpSocket = new QUdpSocket(this);
     m_udpSocket->bind(54321);
     connect(m_udpSocket, SIGNAL(readyRead()), this, SLOT(readPendingDatagrams()));
@@ -243,7 +245,9 @@ void MainWindow::readPendingDatagrams() {
     while (m_udpSocket->hasPendingDatagrams()) {
         QByteArray datagram;
         datagram.resize(int(m_udpSocket->pendingDatagramSize()));
-        m_udpSocket->readDatagram(datagram.data(), datagram.size());
+        QHostAddress prcAddr;
+        quint16 prcPort;
+        m_udpSocket->readDatagram(datagram.data(), datagram.size(),&prcAddr, &prcPort);
 
         Msg * msg = (Msg *)datagram.data();
 
@@ -280,6 +284,8 @@ void MainWindow::readPendingDatagrams() {
             {
                 ProcessWidgetDescriptor wd;
                 wd.widget = NULL;
+                wd.processAddress = prcAddr;
+                wd.processPort    = prcPort;
                 m_processMap[key] = wd;
                 updateProcessList();
             }
@@ -289,7 +295,7 @@ void MainWindow::readPendingDatagrams() {
             if( wgt )
                 wgt->setInfo( *processInfo );
             m_processMap[key].lifeTime++;
-
+            m_processMap[key].processInfo = *processInfo;
         }
 
     }
@@ -339,11 +345,11 @@ void MainWindow::updateProcessList()
 
     for (auto it = m_processMap.begin(); it != m_processMap.end(); ++it) {
         const QString &key = it.key();
-        ProcessWidgetDescriptor value = it.value();
 
         QListWidgetItem *item = new QListWidgetItem(ui->lwProcesses);
         ProcessItemWidget * widget = new ProcessItemWidget(nullptr, key );
         widget->show();
+        item->setData(Qt::UserRole, key );
 
         it.value().widget = widget;
         // привязываем виджет к item
@@ -355,4 +361,16 @@ void MainWindow::updateProcessList()
 }
 
 
+void MainWindow::onProcessSelectionChanged()
+{
+    QListWidgetItem * item = ui->lwProcesses->currentItem();
+    QString  data;
+    ProcessWidgetDescriptor wd = m_processMap[ item->data( Qt::UserRole ).toString() ];
+    if( item )
+    {
+         data = item->data( Qt::UserRole ).toString() + "\n";
+        data += wd.processAddress.toString() + ":"  + QString().setNum( wd.processPort )  + "\n";
+    }
 
+    ui->teProcessInspector->setText( data );
+}
