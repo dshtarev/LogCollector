@@ -238,14 +238,21 @@
            <item>
             <layout class="QHBoxLayout" name="horizontalLayout_5">
              <item>
-              <widget class="QPushButton" name="pushButton">
+              <widget class="QPushButton" name="pbKill">
                <property name="text">
                 <string>Завершить</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_2">
+              <widget class="QPushButton" name="pbPause">
+               <property name="text">
+                <string>Пауза</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pbStart">
                <property name="text">
                 <string>Запустить</string>
                </property>

@@ -7,6 +7,7 @@
 #include <QHostAddress>
 #include <QFont>
 #include <QLabel>
+#include <time.h>
 
 class QUdpSocket;
 
@@ -30,7 +31,8 @@ struct ProcessInfo
 {
     double  cpuUsage;
     int     mem;
-    uint8_t process_state;
+    uint8_t processState;
+    time_t  startTime;
 
 };
 
@@ -115,6 +117,11 @@ protected:
 
     void getProcessInfo( int pid );
     void createDashboard();
+
+private slots:
+    void on_pbKill_clicked();
+
+    void on_pbStart_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QScrollArea>
 #include <QProcess>
+#include <QDateTime>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -42,12 +43,12 @@ void ProcessItemWidget::setInfo(const ProcessInfo & info)
     QString infoStr = "CPU:" + QString::number(info.cpuUsage,'f', 2 ) + " MEM:"+QString::number(info.mem/1000.0,'f',2 )+"MB";
     lbInfo->setText( infoStr );
 
-    if( info.process_state == QProcess::Running )
+    if( info.processState == QProcess::Running )
     {
         setStyleSheet("background-color: lightgreen;");
     }
 
-    if( info.process_state == QProcess::NotRunning )
+    if( info.processState == QProcess::NotRunning )
     {
         setStyleSheet("background-color: red;");
     }
@@ -364,13 +365,38 @@ void MainWindow::updateProcessList()
 void MainWindow::onProcessSelectionChanged()
 {
     QListWidgetItem * item = ui->lwProcesses->currentItem();
-    QString  data;
-    ProcessWidgetDescriptor wd = m_processMap[ item->data( Qt::UserRole ).toString() ];
     if( item )
     {
-         data = item->data( Qt::UserRole ).toString() + "\n";
+        QString  data;
+        ProcessWidgetDescriptor wd = m_processMap[ item->data( Qt::UserRole ).toString() ];
+        data = item->data( Qt::UserRole ).toString() + "\n";
         data += wd.processAddress.toString() + ":"  + QString().setNum( wd.processPort )  + "\n";
+        data += "Start time:" + QDateTime::fromTime_t( wd.processInfo.startTime ).toString("yyyy-MM-dd HH:mm:ss");
+        ui->teProcessInspector->setText( data );
     }
 
-    ui->teProcessInspector->setText( data );
 }
+
+void MainWindow::on_pbKill_clicked()
+{
+    QListWidgetItem * item = ui->lwProcesses->currentItem();
+    if( item )
+    {
+        QString  data;
+        ProcessWidgetDescriptor wd = m_processMap[ item->data( Qt::UserRole ).toString() ];
+        m_udpSocket->writeDatagram("kill",wd.processAddress,wd.processPort );
+    }
+}
+
+
+void MainWindow::on_pbStart_clicked()
+{
+    QListWidgetItem * item = ui->lwProcesses->currentItem();
+    if( item )
+    {
+        QString  data;
+        ProcessWidgetDescriptor wd = m_processMap[ item->data( Qt::UserRole ).toString() ];
+        m_udpSocket->writeDatagram("start",wd.processAddress,wd.processPort );
+    }
+}
+
